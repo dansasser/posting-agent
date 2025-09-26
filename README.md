@@ -13,6 +13,7 @@ This project is a general-purpose Facebook automation agent designed to schedule
   - **Recipes (YAML):** Define the style, tone, and structure of generated content.
   - **Protocols (YAML):** Enforce universal safety rules, content constraints, and engagement policies.
 - **Engagement Monitoring:** A basic framework for monitoring comments on published posts.
+- **Keyword-Driven Direct Messages:** Automatically sends predefined Messenger DMs when users leave comments that match configured trigger phrases.
 - **Dockerized:** Comes with a `Dockerfile` and `docker-compose.yml` for easy and consistent deployment.
 - **Structured Logging:** Outputs JSON logs for better observability.
 
@@ -97,7 +98,30 @@ docker-compose logs -f
 4.  **Content Generation (`agent/`):** The `ContentGenerator` uses the `LLMClient` and `prompt_templates` to create content that matches the topic and recipe guidelines.
 5.  **Validation (`protocol_enforcer.py`):** The generated content is validated against the rules in the protocol card to ensure it's safe and meets length/format requirements.
 6.  **Posting (`adapters/facebook_client.py`):** The `FacebookClient` posts the validated content to your page via the Facebook Graph API.
-7.  **Engagement (`orchestrator/engagement.py`):** A background thread monitors the posts made by the agent, checking for new comments and applying engagement rules (e.g., rate-limiting).
+7.  **Engagement (`orchestrator/engagement.py`):** A background thread monitors the posts made by the agent, checking for new comments and applying engagement rules (e.g., rate-limiting and DM triggers).
+
+### Configuring Direct Message Triggers
+
+The engagement loop can automatically send a Facebook Messenger DM when a commenter uses one of the configured trigger keywords. The templates are defined in the protocol card so they can be managed alongside the rest of your safety and engagement policy.
+
+1. **Add or edit trigger keywords** under `engagement_rules.dm_policy.trigger_templates` in [`app/protocols/protocol_card.yaml`](app/protocols/protocol_card.yaml). Each keyword maps to a reusable template identifier and the exact message body that will be sent.
+
+    ```yaml
+    engagement_rules:
+      dm_policy:
+        trigger_templates:
+          "demo":
+            template_id: "product_demo"
+            message: "Thanks for the interest! I'll DM you a quick walkthrough video."
+    ```
+
+2. **Restart the agent** (or reload the configuration) so the updated protocol card is picked up by the engagement manager.
+
+3. **Run the engagement worker**. When a new comment is scanned, the protocol enforcer returns the matched keyword and template. The engagement manager then calls `FacebookClient.send_direct_message` with the configured message text and records an audit entry in the `direct_message_audit` table (see `app/database/models.py`). This keeps a history of what was sent, to whom, which template was used, and the resulting Messenger message ID if available.
+
+4. **Respect rate limits.** The per-user DM frequency is controlled by `per_user_dm_limit_hours` in the same YAML section. Users who have already been contacted within that window will be skipped automatically.
+
+If you prefer to store templates in a database instead of the YAML protocol card, you can create a dedicated configuration table and update the `ProtocolEnforcer` to read from it. Regardless of the storage location, make sure the engagement manager has access to the final message body so it can deliver consistent DMs.
 
 ## Extensibility
 

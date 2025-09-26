@@ -1,4 +1,4 @@
-from typing import List, Dict, Any
+from typing import Dict, Any, Optional
 
 from app.telemetry.logger import get_logger
 
@@ -17,9 +17,12 @@ class Moderator:
             protocol: A dictionary loaded from a protocol YAML file.
         """
         self.global_rules = protocol.get("global_rules", {})
+        self.engagement_rules = protocol.get("engagement_rules", {})
         self.forbidden_keywords = [
             kw.lower() for kw in self.global_rules.get("forbidden_topics", [])
         ]
+        dm_policy = self.engagement_rules.get("dm_policy", {})
+        self.dm_triggers = dm_policy.get("trigger_templates", {})
         logger.info("Moderator initialized.", extra={"forbidden_keywords": self.forbidden_keywords})
 
     def is_safe(self, text: str) -> bool:
@@ -45,7 +48,9 @@ class Moderator:
         logger.info("Text passed moderation check.")
         return True
 
-    def should_dm_user(self, comment_text: str, dm_policy: Dict[str, Any]) -> bool:
+    def should_dm_user(
+        self, comment_text: str, dm_policy: Dict[str, Any]
+    ) -> Optional[Dict[str, Any]]:
         """
         Determines whether a direct message should be sent based on comment content.
 
@@ -54,13 +59,32 @@ class Moderator:
             dm_policy: The direct message policy from the protocol.
 
         Returns:
-            True if a DM should be sent, False otherwise.
+            A dictionary describing the matching DM template configuration when a
+            trigger is found. Returns None otherwise.
         """
-        trigger_keywords = dm_policy.get("trigger_keywords", [])
         comment_lower = comment_text.lower()
 
-        if any(keyword.lower() in comment_lower for keyword in trigger_keywords):
-            logger.info("DM trigger keyword found in comment.", extra={"comment": comment_text})
-            return True
+        trigger_templates = dm_policy.get("trigger_templates") or self.dm_triggers
+        for keyword, template_config in trigger_templates.items():
+            if keyword.lower() in comment_lower:
+                match = {
+                    "keyword": keyword,
+                    "template_id": template_config.get("template_id"),
+                    "message": template_config.get("message"),
+                }
+                logger.info(
+                    "DM trigger keyword found in comment.",
+                    extra={"comment": comment_text, "keyword": keyword},
+                )
+                return match
 
-        return False
+        trigger_keywords = dm_policy.get("trigger_keywords", [])
+        for keyword in trigger_keywords:
+            if keyword.lower() in comment_lower:
+                logger.info(
+                    "Legacy DM trigger keyword found in comment.",
+                    extra={"comment": comment_text, "keyword": keyword},
+                )
+                return {"keyword": keyword, "template_id": None, "message": None}
+
+        return None
