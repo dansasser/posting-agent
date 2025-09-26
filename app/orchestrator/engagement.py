@@ -8,7 +8,7 @@ from app.safety.moderation import Moderator
 from app.safety.rate_limiter import PerUserRateLimiter
 from app.agent.protocol_enforcer import ProtocolEnforcer
 from app.telemetry.logger import get_logger
-from app.database.models import Post
+from app.database.models import Post, DirectMessageAudit
 from app.database.engine import SessionLocal
 
 logger = get_logger(__name__)
@@ -83,12 +83,62 @@ class EngagementManager:
 
             logger.info(f"Processing new comment {comment_id} from user {user_id}.")
 
-            dm_policy = self.protocol_enforcer.get_dm_policy()
-            if self.moderator.should_dm_user(comment_text, dm_policy):
-                if self.dm_limiter.can_perform_action(user_id, db):
-                    logger.info(f"DM action triggered for user {user_id}. Logging intent.")
-                    self.dm_limiter.record_action(user_id, db)
-                    db.commit() # Commit the action
+            dm_match = self.protocol_enforcer.match_dm_trigger(comment_text)
+            if dm_match:
+                if not dm_match.get("message"):
+                    logger.warning(
+                        "DM trigger matched but no message configured.",
+                        extra={"comment_id": comment_id, "keyword": dm_match.get("keyword")},
+                    )
+                elif self.dm_limiter.can_perform_action(user_id, db):
+                    logger.info(
+                        f"DM action triggered for user {user_id}. Sending message.",
+                        extra={"comment_id": comment_id, "keyword": dm_match.get("keyword")},
+                    )
+                    try:
+                        message_id = self.fb_client.send_direct_message(
+                            user_id, dm_match["message"]
+                        )
+                        if message_id:
+                            self.dm_limiter.record_action(user_id, db)
+                            audit_record = DirectMessageAudit(
+                                user_id=user_id,
+                                comment_id=comment_id,
+                                keyword=dm_match.get("keyword"),
+                                template_id=dm_match.get("template_id"),
+                                message=dm_match.get("message", ""),
+                                platform_message_id=message_id,
+                            )
+                            db.add(audit_record)
+                            db.commit()
+                            logger.info(
+                                "DM sent and recorded.",
+                                extra={
+                                    "user_id": user_id,
+                                    "comment_id": comment_id,
+                                    "message_id": message_id,
+                                },
+                            )
+                            self.processed_comment_ids.add(comment_id)
+                            continue
+                        logger.error(
+                            "Failed to send DM despite trigger match.",
+                            extra={"user_id": user_id, "comment_id": comment_id},
+                        )
+                    except Exception as exc:
+                        logger.error(
+                            "Exception occurred while sending DM.",
+                            extra={"user_id": user_id, "comment_id": comment_id, "error": str(exc)},
+                            exc_info=True,
+                        )
+                        db.rollback()
+                        self.processed_comment_ids.add(comment_id)
+                        continue
+                else:
+                    logger.info(
+                        "User is rate limited for DMs.",
+                        extra={"user_id": user_id, "comment_id": comment_id},
+                    )
                     self.processed_comment_ids.add(comment_id)
                     continue
 

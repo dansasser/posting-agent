@@ -117,6 +117,47 @@ class FacebookClient:
         except requests.exceptions.RequestException:
             return None
 
+    def send_direct_message(self, user_id: str, message: str) -> Optional[str]:
+        """
+        Sends a direct message to a user via Facebook Messenger.
+
+        Args:
+            user_id: The Facebook ID of the recipient.
+            message: The message body to send.
+
+        Returns:
+            The ID of the sent message if successful, otherwise None.
+        """
+        endpoint = f"{self.page_id}/messages"
+        payload = {
+            "recipient": {"id": user_id},
+            "message": {"text": message},
+            "messaging_type": "RESPONSE",
+        }
+
+        logger.info(
+            "Sending direct message.",
+            extra={"user_id": user_id, "preview": message[:50]},
+        )
+
+        try:
+            response = self._request("POST", endpoint, json=payload)
+            message_id = response.get("message_id")
+            if message_id:
+                logger.info(
+                    "Successfully sent direct message.",
+                    extra={"user_id": user_id, "message_id": message_id},
+                )
+                return message_id
+
+            logger.warning(
+                "Direct message response missing message_id.",
+                extra={"user_id": user_id, "response": response},
+            )
+            return None
+        except requests.exceptions.RequestException:
+            return None
+
     def get_comments(self, post_id: str) -> Dict[str, Any]:
         """
         Retrieves comments from a specific post.

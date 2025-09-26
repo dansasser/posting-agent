@@ -1,4 +1,4 @@
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Optional
 
 from app.telemetry.logger import get_logger
 
@@ -65,3 +65,48 @@ class ProtocolEnforcer:
         Returns the maximum number of replies allowed per user in a thread.
         """
         return self.engagement_rules.get("max_replies_per_user", 2)
+
+    def get_dm_triggers(self) -> Dict[str, Dict[str, Any]]:
+        """
+        Returns the mapping of DM trigger keywords to template metadata.
+        """
+        dm_policy = self.get_dm_policy()
+        return dm_policy.get("trigger_templates", {})
+
+    def match_dm_trigger(self, comment_text: str) -> Optional[Dict[str, Any]]:
+        """
+        Finds the DM template configuration that matches the user's comment.
+
+        Args:
+            comment_text: The text of the user's comment.
+
+        Returns:
+            A dictionary containing the matched keyword, template identifier, and
+            message body when a trigger is found. Returns None if no trigger
+            matches the comment.
+        """
+        comment_lower = comment_text.lower()
+        for keyword, template_config in self.get_dm_triggers().items():
+            if keyword.lower() in comment_lower:
+                match_payload = {
+                    "keyword": keyword,
+                    "template_id": template_config.get("template_id"),
+                    "message": template_config.get("message"),
+                }
+                logger.info(
+                    "DM trigger matched.",
+                    extra={"keyword": keyword, "template": match_payload},
+                )
+                return match_payload
+
+        # Fallback to legacy trigger keywords if configured without templates.
+        legacy_keywords = self.get_dm_policy().get("trigger_keywords", [])
+        for keyword in legacy_keywords:
+            if keyword.lower() in comment_lower:
+                logger.info(
+                    "Legacy DM trigger matched.",
+                    extra={"keyword": keyword},
+                )
+                return {"keyword": keyword, "template_id": None, "message": None}
+
+        return None

@@ -28,7 +28,22 @@ engagement_rules:
   # Rules for when to reply vs. when to send a Direct Message.
   dm_policy:
     # Only send a DM if the user's comment contains specific keywords or expresses direct interest.
-    trigger_keywords: ["help", "more info", "details", "interested", "DM me"]
+    trigger_templates:
+      help:
+        template_id: "support_follow_up"
+        message: "Hi there! Thanks for reaching out — we'd love to help. What's the best way for us to follow up with you?"
+      "more info":
+        template_id: "information_request"
+        message: "Appreciate your interest! I'll send you more details right here. Is there anything specific you're looking to learn?"
+      details:
+        template_id: "information_request"
+        message: "Happy to share the details! I'll DM you a quick overview. Feel free to reply with any follow-up questions."
+      interested:
+        template_id: "interest_capture"
+        message: "That's awesome to hear! I'll send you a DM with the next steps so we can keep things moving."
+      "DM me":
+        template_id: "direct_request"
+        message: "You got it! I'll message you the information so it's easy to keep the conversation going."
     # Do not DM the same user more than once in a 24-hour period.
     per_user_dm_limit_hours: 24
 
