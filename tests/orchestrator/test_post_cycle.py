@@ -1,4 +1,6 @@
 import pytest
+from unittest import mock
+
 from app.orchestrator import post_cycle
 
 # A sample recipe for a longform post
@@ -11,6 +13,12 @@ THREAD_RECIPE = {
     "post_style": {"length_words": [5, 10], "tone": "engaging", "cta": "Read more below!"},
     "comments_style": {"count": 2, "length_words": [5, 10], "stagger_seconds": [1, 2]},
 }
+
+@pytest.fixture
+def mocker():
+    """Provides access to unittest.mock for compatibility with pytest-mock usage."""
+    return mock
+
 
 @pytest.fixture
 def mock_generator(mocker):
@@ -100,6 +108,28 @@ def test_run_thread_cycle_success(mocker, mock_generator, mock_fb_client, mock_p
     assert mock_fb_client.add_comment.call_count == 2
     mock_fb_client.add_comment.assert_any_call(post_id, comments[0])
     mock_fb_client.add_comment.assert_any_call(post_id, comments[1])
+
+
+def test_run_thread_cycle_returns_post_id_when_no_comments(
+    mocker, mock_generator, mock_fb_client, mock_protocol_enforcer
+):
+    """Ensures cycles without generated comments still return the post ID."""
+    mocker.patch("time.sleep")
+    topic = "thread topic"
+    main_post_content = "Main post."
+    post_id = "fb_post_456"
+
+    mock_generator.generate_post.return_value = main_post_content
+    mock_generator.generate_thread_comments.return_value = []
+    mock_fb_client.post_to_feed.return_value = post_id
+    mock_protocol_enforcer.validate_content.return_value = True
+
+    result = post_cycle.run_thread_cycle(
+        topic, mock_generator, mock_fb_client, mock_protocol_enforcer, THREAD_RECIPE
+    )
+
+    assert result == post_id
+    mock_fb_client.add_comment.assert_not_called()
 
 def test_run_thread_cycle_post_fails(mock_generator, mock_fb_client, mock_protocol_enforcer):
     """Tests that the thread cycle aborts if the main post fails."""
