@@ -1,8 +1,9 @@
 import requests
-from typing import Optional, Dict, Any, List
+from typing import Optional, Dict, Any
 
 from app.configs import settings
 from app.telemetry.logger import get_logger
+from app.telemetry import metrics
 
 logger = get_logger(__name__)
 
@@ -60,9 +61,11 @@ class FacebookClient:
                 f"HTTP Error for {method.upper()} {url}: {e.response.status_code} "
                 f"Response: {e.response.text}"
             )
+            metrics.API_ERRORS.labels(client='facebook').inc()
             raise
         except requests.exceptions.RequestException as e:
             logger.error(f"Request failed for {method.upper()} {url}: {e}")
+            metrics.API_ERRORS.labels(client='facebook').inc()
             raise
 
     def post_to_feed(self, message: str) -> Optional[str]:

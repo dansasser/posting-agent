@@ -1,8 +1,9 @@
 import openai
-from typing import Optional, List, Dict, Any
+from typing import Optional
 
 from app.configs import settings
 from app.telemetry.logger import get_logger
+from app.telemetry import metrics
 
 logger = get_logger(__name__)
 
@@ -61,7 +62,9 @@ class LLMClient:
             return content.strip() if content else None
         except openai.APIError as e:
             logger.error(f"OpenAI API error: {e}")
+            metrics.API_ERRORS.labels(client='openai').inc()
             return None
         except Exception as e:
             logger.error(f"An unexpected error occurred during text generation: {e}")
+            metrics.API_ERRORS.labels(client='openai').inc()
             return None

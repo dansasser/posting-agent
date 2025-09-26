@@ -3,3 +3,6 @@ apscheduler
 requests
 PyYAML
 openai
+SQLAlchemy
+alembic
+prometheus-client

@@ -1,14 +1,13 @@
-import schedule
-import time
-import random
 import threading
-from typing import List, Dict, Any
+import random
+import time
 
 from apscheduler.schedulers.blocking import BlockingScheduler
 from apscheduler.triggers.cron import CronTrigger
 
 from app.configs import settings
 from app.telemetry.logger import get_logger
+from app.telemetry import metrics
 from app.adapters.facebook_client import FacebookClient
 from app.agent.llm_client import LLMClient
 from app.agent.generators import ContentGenerator
@@ -17,14 +16,11 @@ from app.agent.protocol_enforcer import ProtocolEnforcer
 from app.safety.moderation import Moderator
 from app.orchestrator import post_cycle
 from app.orchestrator.engagement import EngagementManager
+from app.database.engine import SessionLocal
+from app.database.models import Post
 
 # --- Global State ---
 logger = get_logger(__name__)
-# A simple, in-memory list of post IDs to monitor for engagement.
-# In a larger application, this would be a database.
-tracked_post_ids: List[str] = []
-# A lock to safely append to the tracked_post_ids list from different threads.
-thread_lock = threading.Lock()
 
 # A predefined list of topics. This can be expanded or sourced from a file/API.
 POST_TOPICS = [
@@ -60,16 +56,20 @@ except (ValueError, FileNotFoundError) as e:
 
 # --- Core Job Functions ---
 
+@metrics.JOB_DURATION.time()
 def scheduled_post_job():
     """
     The main job executed by the scheduler.
-    It selects a random topic and post type, then runs the corresponding cycle.
+    It selects a random topic and post type, then runs the corresponding cycle
+    and saves the new post to the database.
     """
     logger.info("Scheduler triggered. Starting a new post job.")
 
+    db = SessionLocal()
     try:
         topic = random.choice(POST_TOPICS)
         post_type = random.choice(["thread", "longform"])
+        new_post_id = None
 
         if post_type == "thread":
             recipe = cards_loader.load_recipe("recipe_thread_post.yaml")
@@ -83,26 +83,50 @@ def scheduled_post_job():
             )
 
         if new_post_id:
-            with thread_lock:
-                tracked_post_ids.append(new_post_id)
-            logger.info(f"New post {new_post_id} is now being tracked for engagement.")
+            # Increment the posts created metric
+            metrics.POSTS_CREATED.labels(post_type=post_type).inc()
+
+            # Save the new post to the database
+            new_post_record = Post(
+                facebook_post_id=new_post_id,
+                topic=topic,
+                post_type=post_type,
+                is_active_for_engagement=True
+            )
+            db.add(new_post_record)
+            db.commit()
+            logger.info(
+                f"New post {new_post_id} saved to database and is being tracked for engagement."
+            )
 
     except Exception as e:
         logger.error(f"An error occurred in the scheduled post job: {e}", exc_info=True)
+        db.rollback()
+    finally:
+        db.close()
 
 def start_engagement_loop():
     """
     Starts the engagement monitoring loop in a background thread.
     """
     logger.info("Starting the engagement monitoring loop in a background thread.")
-    # The engagement loop runs indefinitely, so it's started in a daemon thread.
-    # This allows the main thread (scheduler) to exit gracefully.
     engagement_thread = threading.Thread(
         target=engagement_manager.run_engagement_loop,
-        args=(tracked_post_ids,),
         daemon=True
     )
     engagement_thread.start()
+
+def start_metrics_server_in_thread():
+    """
+    Starts the Prometheus metrics server in a background thread.
+    """
+    logger.info("Starting the metrics server in a background thread on port 8000.")
+    metrics_thread = threading.Thread(
+        target=metrics.start_metrics_server,
+        args=(8000,),
+        daemon=True
+    )
+    metrics_thread.start()
 
 
 # --- Main Application Execution ---
@@ -113,17 +137,16 @@ def main():
     """
     logger.info("--- Facebook Automation Agent Starting Up ---")
 
-    # Start the engagement loop in the background
+    # Start background services
     start_engagement_loop()
+    start_metrics_server_in_thread()
 
     # Configure the scheduler
     scheduler = BlockingScheduler(timezone="UTC")
 
-    # Schedule the posting job based on hours defined in settings
-    # Example: POST_SCHEDULE_HOURS = [9, 12, 15, 18, 21]
     trigger = CronTrigger(
         hour=",".join(map(str, settings.POST_SCHEDULE_HOURS)),
-        minute=0, # Run at the top of the hour
+        minute=0,
         second=0
     )
 
@@ -136,9 +159,6 @@ def main():
     logger.info(f"Scheduler configured to run at: {settings.POST_SCHEDULE_HOURS} UTC.")
 
     try:
-        # For immediate testing, you can run a job right at the start
-        # scheduled_post_job()
-
         scheduler.start()
     except (KeyboardInterrupt, SystemExit):
         logger.info("--- Facebook Automation Agent Shutting Down ---")

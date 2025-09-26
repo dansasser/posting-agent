@@ -1,5 +1,8 @@
 version: '3.8'
 
+volumes:
+  db_data:
+
 services:
   facebook-agent:
     build: .
@@ -9,4 +12,7 @@ services:
       - .env
     volumes:
       - ./app:/usr/src/app/app
-    command: python app/main.py
+      - db_data:/usr/src/app
+    ports:
+      - "8000:8000"
+    command: sh -c "alembic upgrade head && python app/main.py"
