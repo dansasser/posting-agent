@@ -51,7 +51,7 @@ def run_thread_cycle(
     comments = generator.generate_thread_comments(topic, main_post_content, recipe)
     if not comments:
         logger.warning("No comments were generated for the thread. Cycle ends.")
-        return
+        return post_id
 
     # 4. Publish comments with staggered delays
     min_delay, max_delay = comments_style.get("stagger_seconds", [60, 180])
