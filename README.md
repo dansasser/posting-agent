@@ -48,8 +48,8 @@ README.md
 
 1.  **Clone the repository:**
     ```bash
-    git clone <repository_url>
-    cd <repository_directory>
+    git clone https://github.com/dansasser/posting-agent.git
+    cd posting-agent
     ```
 
 2.  **Create a `.env` file:**
