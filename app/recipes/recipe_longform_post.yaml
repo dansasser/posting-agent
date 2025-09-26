@@ -1,0 +1,16 @@
+# Recipe for a "Longform Punchy Post"
+# A single, well-structured post with a strong call-to-action.
+
+# --- Style Definition ---
+name: "Longform Punchy Post"
+description: "A 150-250 word post designed to be informative and persuasive, ending with a clear call-to-action."
+
+# --- Generation Parameters ---
+post_style:
+  length_words: [150, 250]
+  tone: "Authoritative and compelling"
+  structure:
+    - "Hook: Grab attention with a surprising fact or question."
+    - "Body: Provide value, insights, or a compelling narrative."
+    - "Conclusion: Summarize the key takeaway."
+  cta: "What are your thoughts? Drop a comment below!" # Strong call-to-action

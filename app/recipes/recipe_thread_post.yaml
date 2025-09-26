@@ -1,0 +1,19 @@
+# Recipe for a "Thread Post"
+# A short initial post followed by a series of threaded comments.
+
+# --- Style Definition ---
+name: "Standard Thread Post"
+description: "A short, engaging post followed by 10 numbered comments to elaborate on a topic."
+
+# --- Generation Parameters ---
+post_style:
+  length_words: [20, 40]
+  tone: "Intriguing and concise"
+  cta: "Follow the thread below for the full story! 👇"
+
+comments_style:
+  count: 10
+  length_words: [30, 50]
+  tone: "Informative and sequential"
+  numbering_scheme: "({i}/{n})" # e.g., (1/10), (2/10)
+  stagger_seconds: [60, 180] # Min/max delay between comments

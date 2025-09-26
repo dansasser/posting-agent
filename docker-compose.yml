@@ -1,0 +1,12 @@
+version: '3.8'
+
+services:
+  facebook-agent:
+    build: .
+    container_name: facebook_automation_agent
+    restart: unless-stopped
+    env_file:
+      - .env
+    volumes:
+      - ./app:/usr/src/app/app
+    command: python app/main.py

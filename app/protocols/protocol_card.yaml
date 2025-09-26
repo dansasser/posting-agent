@@ -1,0 +1,36 @@
+# Protocol Card
+# Defines universal rules and constraints for all generated content.
+# These rules are enforced by the ProtocolEnforcer to ensure safety and brand consistency.
+
+# --- Content Safety & Constraints ---
+global_rules:
+  # Prohibited content categories
+  forbidden_topics:
+    - "Hate speech"
+    - "Misinformation"
+    - "Violence"
+    - "Spam"
+    - "Illegal activities"
+
+  # All posts must end with a question or a call-to-action to encourage engagement.
+  must_end_with_cta: true
+
+  # Maximum character length for any single post or comment.
+  # Facebook's limit is much higher, but this is a practical limit for engagement.
+  max_char_length: 2000
+
+  # Ensure generated content is unique and not repetitive.
+  # (This would be enforced programmatically by checking against recent posts)
+  enforce_uniqueness: true
+
+# --- Engagement Policy ---
+engagement_rules:
+  # Rules for when to reply vs. when to send a Direct Message.
+  dm_policy:
+    # Only send a DM if the user's comment contains specific keywords or expresses direct interest.
+    trigger_keywords: ["help", "more info", "details", "interested", "DM me"]
+    # Do not DM the same user more than once in a 24-hour period.
+    per_user_dm_limit_hours: 24
+
+  # Maximum number of replies to a single user in one thread to avoid spamming.
+  max_replies_per_user: 2
